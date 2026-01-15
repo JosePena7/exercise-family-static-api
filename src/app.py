@@ -15,6 +15,7 @@ CORS(app)
 # create the jackson family object
 jackson_family = FamilyStructure("Jackson")
 
+
 # Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
 def handle_invalid_usage(error):
@@ -25,18 +26,64 @@ def handle_invalid_usage(error):
 def sitemap():
     return generate_sitemap(app)
 
+
+# GET all members
 @app.route('/members', methods=['GET'])
-def handle_hello():
-
-    # this is how you can use the Family datastructure by calling its methods
+def get_members():
     members = jackson_family.get_all_members()
-    response_body = {
-        "hello": "world",
-        "family": members
-    }
+    result = []
+    for m in members:
+        m_copy = m.copy()
+        if "name" in m_copy:
+            m_copy["first_name"] = m_copy.pop("name")
+        result.append(m_copy)
+    return jsonify(result), 200
 
+# GET single member
+@app.route('/member/<int:member_id>', methods=['GET'])
+def get_member(member_id):
+    member = jackson_family.get_member(member_id)
+    if member:
+        member_copy = member.copy()
+        if "name" in member_copy:
+            member_copy["first_name"] = member_copy.pop("name")
+        return jsonify(member_copy), 200
+    return jsonify({"error": "Member not found"}), 404
 
-    return jsonify(response_body), 200
+# POST new member
+@app.route('/member', methods=['POST'])
+def add_member():
+    body = request.get_json()
+    if not body:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    required_fields = ["first_name", "age", "lucky_numbers"]
+    for field in required_fields:
+        if field not in body:
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    new_member = jackson_family.add_member({
+        "first_name": body["first_name"],
+        "age": body["age"],
+        "lucky_numbers": body["lucky_numbers"],
+        "id": body.get("id")  # optional manual id
+    })
+
+    # Convert "name" → "first_name" for response
+    response_member = new_member.copy()
+    if "name" in response_member:
+        response_member["first_name"] = response_member.pop("name")
+
+    return jsonify(response_member), 200
+
+# DELETE a member
+@app.route('/member/<int:member_id>', methods=['DELETE'])
+def delete_member(member_id):
+    deleted = jackson_family.delete_member(member_id)
+    if deleted:
+        return jsonify({"done": True}), 200
+    return jsonify({"error": "Member not found"}), 404
+
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
